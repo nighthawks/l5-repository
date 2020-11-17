@@ -49,7 +49,6 @@ class RequestCriteria implements CriteriaInterface
         $sortedBy = !empty($sortedBy) ? $sortedBy : 'asc';
 
         if ($search && is_array($fieldsSearchable) && count($fieldsSearchable)) {
-
             $searchFields = is_array($searchFields) || is_null($searchFields) ? $searchFields : explode(';', $searchFields);
             $fields = $this->parserFieldsSearch($fieldsSearchable, $searchFields);
             $isFirstField = true;
@@ -72,10 +71,38 @@ class RequestCriteria implements CriteriaInterface
                     $condition = trim(strtolower($condition));
 
                     if (isset($searchData[$field])) {
-                        $value = ($condition == "like" || $condition == "ilike") ? "%{$searchData[$field]}%" : $searchData[$field];
+                        //$value = ($condition == "like" || $condition == "ilike") ? "%{$searchData[$field]}%" : $searchData[$field];
+                        switch ($condition) {
+                            case 'like':
+                            case 'ilike':
+                                $value = "%{$searchData[$field]}%";
+                            break;
+                            case 'between':
+                                $temp = $searchData[$field];
+                                $temp = explode(',', $temp);
+                                $value = $temp;
+                            break;
+                            default:
+                                $value = $searchData[$field];
+                            break;
+                        }
                     } else {
                         if (!is_null($search)) {
                             $value = ($condition == "like" || $condition == "ilike") ? "%{$search}%" : $search;
+                            switch ($condition) {
+                                case 'like':
+                                case 'ilike':
+                                    $value = "%{$search}%";
+                                break;
+                                case 'between':
+                                    $temp = $search;
+                                    $temp = explode(',', $temp);
+                                    $value = $temp;
+                                break;
+                                default:
+                                    $value = $search;
+                                break;
+                            }
                         }
                     }
 
@@ -90,10 +117,46 @@ class RequestCriteria implements CriteriaInterface
                         if (!is_null($value)) {
                             if(!is_null($relation)) {
                                 $query->whereHas($relation, function($query) use($field,$condition,$value) {
-                                    $query->where($field,$condition,$value);
+                                    //$query->where($field,$condition,$value);
+                                    switch ($condition) {
+                                        case 'between': {
+                                            if(is_array($value) && count($value) == 2) {
+                                                if(!empty($value[0]) && !empty($value[1])) {
+                                                    $query->whereBetween($field, $value);
+                                                } else if(empty($value[0])) {
+                                                    $query->where($field, '<=', $value[1]);
+                                                } else if(empty($value[1])) {
+                                                    $query->where($field, '>=', $value[0]);
+                                                }
+                                            }
+                                        }
+                                        break;
+    
+                                        default:
+                                            $query->where($field,$condition,$value);
+                                        break;
+                                    }
                                 });
                             } else {
-                                $query->where($modelTableName.'.'.$field,$condition,$value);
+                                //$query->where($modelTableName.'.'.$field,$condition,$value);
+                                switch ($condition) {
+                                    case 'between': {
+                                        if(is_array($value) && count($value) == 2) {
+                                            if(!empty($value[0]) && !empty($value[1])) {
+                                                $query->whereBetween($modelTableName.'.'.$field, $value);
+                                            } else if(empty($value[0])) {
+                                                $query->where($modelTableName.'.'.$field, '<=', $value[1]);
+                                            } else if(empty($value[1])) {
+                                                $query->where($modelTableName.'.'.$field, '>=', $value[0]);
+                                            }
+                                        }
+                                    }
+                                    break;
+
+                                    default:
+                                        $query->where($modelTableName.'.'.$field,$condition,$value);
+                                    break;
+                                }
                             }
                             $isFirstField = false;
                         }
